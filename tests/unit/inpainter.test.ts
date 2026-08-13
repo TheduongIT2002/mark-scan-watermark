@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { inpaintImage, teleaInpaint } from "@/lib/inpainter/inpaint";
+import {
+  contentAwareInpaint,
+  inpaintImage,
+  teleaInpaint,
+} from "@/lib/inpainter/inpaint";
 import type { BoundingBox } from "@/types";
 
 describe("inpaintImage module", () => {
@@ -48,5 +52,23 @@ describe("inpaintImage module", () => {
     expect(result.cleanedBlob).toBeInstanceOf(Blob);
     expect(result.cleanedFile).toBeInstanceOf(File);
     expect(result.cleanedFile.name).toBe("sample-cleaned.jpg");
+  });
+
+  it("preserves a crossing texture line with coherent patch synthesis", () => {
+    const width = 60;
+    const height = 30;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const box: BoundingBox = { x: 23, y: 8, width: 14, height: 14, imageWidth: width, imageHeight: height };
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = (y * width + x) * 4;
+        const value = y === 15 ? 25 : 180;
+        data.set([value, value, value, 255], index);
+      }
+    }
+    contentAwareInpaint(data, width, height, 0, 0, box);
+
+    expect(data[(15 * width + 30) * 4]).toBe(25);
   });
 });
