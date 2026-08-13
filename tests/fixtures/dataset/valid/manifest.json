@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "1.0.0",
+  "datasetId": "synthetic-authorized-fixture",
+  "canonicalLogo": {
+    "path": "canonical/logo.png",
+    "sha256": {
+      "algorithm": "SHA-256",
+      "hex": "cd864b2343b7bad74c994da6341167e0e5284dcfb8a4fdcb5405c2842e83f818"
+    },
+    "width": 8,
+    "height": 8
+  },
+  "rights": {
+    "authorized": true,
+    "attestation": "Synthetic fixtures generated for automated tests.",
+    "attestedAt": "2026-01-01T00:00:00.000Z"
+  },
+  "benchmark": {
+    "requirePositiveMasks": true,
+    "requiredSplits": [
+      "train",
+      "validation",
+      "test"
+    ]
+  },
+  "items": [
+    {
+      "id": "p-train",
+      "groupId": "g1",
+      "imagePath": "images/train-positive.png",
+      "sha256": {
+        "algorithm": "SHA-256",
+        "hex": "606b92d3628c8ebd33339dab036815eb1002489c197f3dadd98da46585b69fc1"
+      },
+      "width": 8,
+      "height": 8,
+      "label": "positive",
+      "split": "train",
+      "boundingBox": {
+        "x": 4,
+        "y": 4,
+        "width": 4,
+        "height": 4
+      },
+      "mask": {
+        "path": "masks/train-positive.png",
+        "sha256": {
+          "algorithm": "SHA-256",
+          "hex": "cd864b2343b7bad74c994da6341167e0e5284dcfb8a4fdcb5405c2842e83f818"
+        }
+      },
+      "category": "flat"
+    },
+    {
+      "id": "p-val",
+      "groupId": "g2",
+      "imagePath": "images/validation-positive.png",
+      "sha256": {
+        "algorithm": "SHA-256",
+        "hex": "6574b1baa6ccda1414e07db0b6ab2ab2564966ea8d50098ec4b7b3b67045c8a0"
+      },
+      "width": 8,
+      "height": 8,
+      "label": "positive",
+      "split": "validation",
+      "boundingBox": {
+        "x": 4,
+        "y": 4,
+        "width": 4,
+        "height": 4
+      },
+      "mask": {
+        "path": "masks/validation-positive.png",
+        "sha256": {
+          "algorithm": "SHA-256",
+          "hex": "5c86eb2f7ee5e56be75b1bbb017d13f179d79a69ce6fa0281e3ffdc62f4743bf"
+        }
+      },
+      "category": "flat"
+    },
+    {
+      "id": "n-val",
+      "groupId": "g3",
+      "imagePath": "images/validation-negative.png",
+      "sha256": {
+        "algorithm": "SHA-256",
+        "hex": "51a8c2dba3399da103c11878773a9c3248fb1780a251e50f160d370d2788ced3"
+      },
+      "width": 8,
+      "height": 8,
+      "label": "negative",
+      "split": "validation",
+      "category": "flat"
+    },
+    {
+      "id": "dn-test",
+      "groupId": "g4",
+      "imagePath": "images/test-difficult.png",
+      "sha256": {
+        "algorithm": "SHA-256",
+        "hex": "6cb2765042bebeb52e629bff22ac7f30300ac09388328647b7a11825eb43211e"
+      },
+      "width": 8,
+      "height": 8,
+      "label": "difficult-negative",
+      "split": "test",
+      "category": "flat"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+﻿import {describe,expect,it} from "vitest";import {classifyConfidence} from "@/lib/detector/config";
+describe("confidence classification",()=>{const t={detected:.85,review:.65};it("uses exact boundaries",()=>{expect(classifyConfidence(.85,t)).toBe("detected");expect(classifyConfidence(.65,t)).toBe("needs-review");expect(classifyConfidence(.649,t)).toBe("not-detected");expect(classifyConfidence(NaN,t)).toBe("error")})});

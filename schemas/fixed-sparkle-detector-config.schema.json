@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FixedSparkleDetectorConfig",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "detectorVersion",
+    "configVersion",
+    "datasetId",
+    "datasetHash",
+    "canonicalLogo",
+    "templateSubregion",
+    "templateHighPass",
+    "referenceDimensions",
+    "searchAnchor",
+    "searchAnchorNormalized",
+    "searchRadius",
+    "searchRadiusNormalized",
+    "algorithm",
+    "threshold",
+    "gates",
+    "configHash"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "detectorVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "configVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "datasetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "datasetHash": {
+      "type": "object",
+      "required": ["algorithm", "hex"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "const": "SHA-256"
+        },
+        "hex": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "canonicalLogo": {
+      "type": "object",
+      "required": ["path", "sha256", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "templateSubregion": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "templateHighPass": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2704,
+      "maxItems": 2704
+    },
+    "referenceDimensions": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "searchAnchor": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "searchAnchorNormalized": {
+      "type": "object",
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "width": { "type": "number", "minimum": 0, "maximum": 1 },
+        "height": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "searchRadius": {
+      "type": "object",
+      "required": ["dx", "dy"],
+      "additionalProperties": false,
+      "properties": {
+        "dx": { "type": "integer", "minimum": 0 },
+        "dy": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "searchRadiusNormalized": {
+      "type": "object",
+      "required": ["dx", "dy"],
+      "additionalProperties": false,
+      "properties": {
+        "dx": { "type": "number", "minimum": 0, "maximum": 1 },
+        "dy": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "algorithm": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "const": "local-highpass-zncc" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "threshold": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "gates": {
+      "type": "object",
+      "required": ["minPrecision", "minRecall", "maxFalsePositiveRate", "maxLatencyP95Ms", "minBoxIoU"],
+      "additionalProperties": false,
+      "properties": {
+        "minPrecision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minRecall": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxFalsePositiveRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxLatencyP95Ms": { "type": "number", "minimum": 1 },
+        "minBoxIoU": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "configHash": {
+      "type": "object",
+      "required": ["algorithm", "hex"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "type": "string", "const": "SHA-256" },
+        "hex": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

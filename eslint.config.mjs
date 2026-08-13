@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated third-party runtime vendored for local-only worker loading.
+    "public/detector-assets/opencv.js",
   ]),
 ]);
 

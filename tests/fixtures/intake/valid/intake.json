@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "1.0.0",
+  "datasetId": "synthetic-intake",
+  "canonicalLogoPath": "canonical/logo.png",
+  "rights": {
+    "authorized": true,
+    "attestation": "Synthetic authorized fixture.",
+    "attestedAt": "2026-01-01T00:00:00Z"
+  },
+  "benchmark": {
+    "requirePositiveMasks": true,
+    "requiredSplits": [
+      "train",
+      "validation",
+      "test"
+    ]
+  },
+  "items": [
+    {
+      "id": "p1",
+      "groupId": "g1",
+      "imagePath": "raw/positive/train.png",
+      "label": "positive",
+      "split": "train",
+      "boundingBox": {
+        "x": 4,
+        "y": 4,
+        "width": 4,
+        "height": 4
+      },
+      "maskPath": "masks/train.png"
+    },
+    {
+      "id": "p2",
+      "groupId": "g2",
+      "imagePath": "raw/positive/validation.png",
+      "label": "positive",
+      "split": "validation",
+      "boundingBox": {
+        "x": 4,
+        "y": 4,
+        "width": 4,
+        "height": 4
+      },
+      "maskPath": "masks/validation.png"
+    },
+    {
+      "id": "n1",
+      "groupId": "g3",
+      "imagePath": "raw/negative/validation.png",
+      "label": "negative",
+      "split": "validation"
+    },
+    {
+      "id": "d1",
+      "groupId": "g4",
+      "imagePath": "raw/difficult-negative/test.png",
+      "label": "difficult-negative",
+      "split": "test"
+    }
+  ]
+}

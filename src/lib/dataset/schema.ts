@@ -1,0 +1,3 @@
+﻿import Ajv2020, {type ErrorObject} from "ajv/dist/2020";import addFormats from "ajv-formats";import schema from "../../../schemas/authorized-logo-dataset.schema.json";import type {DatasetManifest,ValidationIssue} from "./types";
+const ajv=new Ajv2020({allErrors:true,strict:true}),validate=addFormats(ajv).compile<DatasetManifest>(schema);const pointer=(error:ErrorObject)=>error.instancePath||"/";
+export function validateManifestSchema(value:unknown):{valid:true;manifest:DatasetManifest}|{valid:false;issues:ValidationIssue[]}{if(validate(value))return {valid:true,manifest:value};return {valid:false,issues:(validate.errors??[]).map(error=>({code:"INVALID_SCHEMA",path:pointer(error),message:`Schema ${error.keyword} constraint failed at ${pointer(error)}.`}))};}

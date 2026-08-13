@@ -1,0 +1,3 @@
+﻿import Ajv2020 from "ajv/dist/2020";import addFormats from "ajv-formats";import schema from "../../../schemas/authorized-logo-intake.schema.json";import type {DatasetIntake} from "./intake-types";import type {ValidationIssue} from "./types";
+const validate=addFormats(new Ajv2020({allErrors:true,strict:true})).compile<DatasetIntake>(schema);
+export function validateIntakeSchema(value:unknown):{valid:true;intake:DatasetIntake}|{valid:false;issues:ValidationIssue[]}{if(validate(value))return {valid:true,intake:value};return {valid:false,issues:(validate.errors??[]).map(error=>({code:"INVALID_INTAKE_SCHEMA",path:error.instancePath||"/",message:`Intake schema ${error.keyword} constraint failed.`}))};}
