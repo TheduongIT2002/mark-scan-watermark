@@ -15,7 +15,7 @@
     "dataset:benchmark": "tsx scripts/dataset-benchmark.mts",
     "dataset:intake": "tsx scripts/dataset-intake.mts",
     "dataset:calibrate": "tsx scripts/dataset-calibrate.mts",
-    "ai:start": "powershell -ExecutionPolicy Bypass -File ./ai-service/start.ps1"
+    "ai:start": "node ./ai-service/start.mjs"
   },
   "dependencies": {
     "@noble/hashes": "^1.8.0",

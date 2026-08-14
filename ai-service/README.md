@@ -9,6 +9,16 @@ binds only to `127.0.0.1`; source images are never sent to an external API.
 powershell -ExecutionPolicy Bypass -File .\ai-service\start.ps1
 ```
 
+The cross-platform project command works on both Windows and Linux:
+
+```bash
+npm run ai:start
+```
+
+On Linux, it installs the CPU-only PyTorch wheel by default. Set
+`MARKSCAN_TORCH_INDEX_URL` if the host needs a different official PyTorch wheel
+index.
+
 The first inpaint request downloads the verified Big LaMa TorchScript model to
 `%USERPROFILE%\.cache\markscan\big-lama.pt`. Later starts reuse that file.
 

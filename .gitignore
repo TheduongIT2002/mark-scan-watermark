@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-e2e/
 /out/
 
 # production
@@ -51,3 +52,7 @@ next-env.d.ts
 /ai-service/.venv/
 /ai-service/__pycache__/
 /ai-service/*.download
+
+# local build and test artifacts
+/remove-watermark-static.tar.gz
+/test-results/
