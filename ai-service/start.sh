@@ -15,9 +15,9 @@ if [[ ! -x "${python_executable}" ]]; then
   "${bootstrap_python}" -m venv "${virtual_environment}"
 fi
 
-"${python_executable}" -m pip install --upgrade pip
-"${python_executable}" -m pip install "torch>=2.6,<3" --index-url "${torch_index_url}"
-"${python_executable}" -m pip install -r "${service_root}/requirements.txt"
+"${python_executable}" -m pip install --no-cache-dir --upgrade pip
+"${python_executable}" -m pip install --no-cache-dir "torch>=2.6,<3" --index-url "${torch_index_url}"
+"${python_executable}" -m pip install --no-cache-dir -r "${service_root}/requirements.txt"
 
 cd "${service_root}"
 exec "${python_executable}" -m uvicorn server:app --host 127.0.0.1 --port 8384
