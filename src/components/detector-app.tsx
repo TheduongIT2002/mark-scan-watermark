@@ -381,7 +381,7 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
           <section className="results">
             <div className="results-heading">
               <div><span className="secure-kicker">Xử lý hoàn tất</span><h1>Ảnh của bạn đã sẵn sàng</h1><p>Hãy kiểm tra vùng đã khôi phục trước khi tải kết quả xuống.</p></div>
-              <button id="download-audit" className="button primary" onClick={() => void download()}>↓ Tải tất cả</button>
+              <button id="download-results" className="button primary" onClick={() => void download()}>↓ Tải tất cả</button>
             </div>
             <div className="metrics">
               <div><b>{counts.review}</b><span>Hình mờ đã xử lý</span></div>

@@ -8,7 +8,7 @@ const csvCell=(value:string|number|boolean|undefined)=>`"${String(value??"").rep
 export function csvReport(records:AuditRecord[]):string{const heads=["sourceFileName","status","sourceSha256","sourceSize","sourceMimeType","detectorVersion","configVersion","confidence","maskHash","maskVersion","reviewDecision","reviewedAt","authorizationConfirmed","originalArchivePath","error"];return "﻿"+[heads.join(","),...records.map(record=>[record.sourceFileName,record.status,record.sourceHash.hex,record.sourceSize,record.sourceMimeType,record.scan?.detectorVersion,record.scan?.configVersion,record.scan?.confidence,record.mask?.maskHash.hex,record.mask?.version,record.decision?.decision,record.decision?.reviewedAt,false,record.originalArchivePath,record.error?.message].map(csvCell).join(","))].join("\r\n");}
 export async function createArchive(items:QueuedImage[]):Promise<Blob>{
  if(!items.length||items.some(item=>!isTerminalWorkflowStatus(item.status)))throw new Error("Download is available only after the complete batch reaches terminal states.");
- const zip=new JSZip(),used=new Set<string>(),records=toRecords(items);
- for(const item of items){const safe=collisionSafeName(item.file.name,used),path=`originals/${safe}`;zip.file(path,item.file);if(item.cleanedFile){const cleanedSafe=collisionSafeName(item.cleanedFile.name,used);zip.file(`cleaned/${cleanedSafe}`,item.cleanedFile);}const record=records.find(value=>value.itemId===item.id);if(record)record.originalArchivePath=path;}
- zip.file("report.json",jsonReport(records));zip.file("report.csv",csvReport(records));return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
+ const zip=new JSZip(),cleaned=zip.folder("cleaned")!,used=new Set<string>();
+ for(const item of items){const output=item.cleanedFile??item.file;const safe=collisionSafeName(output.name,used);cleaned.file(safe,output);}
+ return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
 }

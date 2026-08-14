@@ -49,11 +49,11 @@ upload is required.
 
 - Next.js 16 App Router, React 19 and strict TypeScript.
 - Browser detector calibrated from an authorized positive/negative dataset.
-- Pixel-accurate sparkle mask with a feathered compositing edge.
+- Pixel-accurate sparkle mask with full-coverage AI compositing.
 - Local FastAPI + TorchScript Big LaMa service with CPU/CUDA auto-selection.
 - Browser-only fallback for machines where the AI process is not running.
-- Original files remain immutable and are archived byte-for-byte.
-- Reconstructed PNG derivatives are stored separately under `cleaned/`.
+- Original files remain immutable and are never added to the result archive.
+- Result ZIP files contain every uploaded image under `cleaned/`: reconstructed PNGs when available, otherwise the unchanged source image.
 
 ## Commands
 
