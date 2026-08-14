@@ -9,6 +9,6 @@ export function csvReport(records:AuditRecord[]):string{const heads=["sourceFile
 export async function createArchive(items:QueuedImage[]):Promise<Blob>{
  if(!items.length||items.some(item=>!isTerminalWorkflowStatus(item.status)))throw new Error("Download is available only after the complete batch reaches terminal states.");
  const zip=new JSZip(),used=new Set<string>(),records=toRecords(items);
- for(const item of items){const safe=collisionSafeName(item.file.name,used),path=`originals/${safe}`;zip.file(path,item.file);if(item.cleanedFile)zip.file(`cleaned/${safe}`,item.cleanedFile);const record=records.find(value=>value.itemId===item.id);if(record)record.originalArchivePath=path;}
+ for(const item of items){const safe=collisionSafeName(item.file.name,used),path=`originals/${safe}`;zip.file(path,item.file);if(item.cleanedFile){const cleanedSafe=collisionSafeName(item.cleanedFile.name,used);zip.file(`cleaned/${cleanedSafe}`,item.cleanedFile);}const record=records.find(value=>value.itemId===item.id);if(record)record.originalArchivePath=path;}
  zip.file("report.json",jsonReport(records));zip.file("report.csv",csvReport(records));return zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
 }

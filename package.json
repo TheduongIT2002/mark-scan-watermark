@@ -14,9 +14,11 @@
     "dataset:validate": "tsx scripts/dataset-validate.mts",
     "dataset:benchmark": "tsx scripts/dataset-benchmark.mts",
     "dataset:intake": "tsx scripts/dataset-intake.mts",
-    "dataset:calibrate": "tsx scripts/dataset-calibrate.mts"
+    "dataset:calibrate": "tsx scripts/dataset-calibrate.mts",
+    "ai:start": "powershell -ExecutionPolicy Bypass -File ./ai-service/start.ps1"
   },
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
     "@techstark/opencv-js": "^5.0.0-release.1",
     "jszip": "^3.10.1",
     "next": "16.3.0",

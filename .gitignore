@@ -46,3 +46,8 @@ next-env.d.ts
 /benchmark-results/
 *.benchmark.json
 *.benchmark.csv
+
+# local AI runtime
+/ai-service/.venv/
+/ai-service/__pycache__/
+/ai-service/*.download

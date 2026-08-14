@@ -12,7 +12,8 @@ export interface ProcessingDecision { itemId:string;sourceHash:ContentHash;maskI
 export interface EditedArtifact { itemId:string;sourceHash:ContentHash;maskHash:ContentHash;artifactHash:ContentHash;fileName:string;mimeType:string;byteLength:number;processorVersion:string;createdAt:string;label:"edited-derivative" }
 export interface AuditRecord { itemId:string;sourceFileName:string;sourceHash:ContentHash;sourceSize:number;sourceMimeType:string;status:TerminalWorkflowStatus;scan?:ScanResult;mask?:Omit<MaskPreview,"overlayUrl">;decision?:ProcessingDecision;authorization:{confirmed:false;confirmedAt?:string};originalArchivePath?:string;error?:ScanError }
 export interface AuditReport { schemaVersion:2;generatedAt:string;privacy:"local-browser-processing";imageContentsLogged:false;records:AuditRecord[] }
-export interface QueuedImage { id:string;file:File;url:string;width:number;height:number;sourceHash:ContentHash;status:WorkflowStatus;scan?:ScanResult;mask?:MaskPreview;decision?:ProcessingDecision;error?:string;cleanedUrl?:string;cleanedFile?:File }
+export type InpaintEngine="lama-hybrid"|"shape-aware-local"|"passthrough";
+export interface QueuedImage { id:string;file:File;url:string;width:number;height:number;sourceHash:ContentHash;status:WorkflowStatus;scan?:ScanResult;mask?:MaskPreview;decision?:ProcessingDecision;error?:string;cleanedUrl?:string;cleanedFile?:File;inpaintEngine?:InpaintEngine;inpaintWarning?:string }
 export const TERMINAL_WORKFLOW_STATUSES=new Set<WorkflowStatus>(["review","not-found","error","cancelled"]);
 export const isTerminalWorkflowStatus=(status:WorkflowStatus):status is TerminalWorkflowStatus=>TERMINAL_WORKFLOW_STATUSES.has(status);
 

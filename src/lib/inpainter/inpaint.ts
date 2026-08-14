@@ -1,9 +1,26 @@
 import type { BoundingBox } from "@/types";
+import { requestLamaInpaint } from "./lama-client";
+import {
+  createSparklePixelMask,
+  sparkleMaskToPng,
+} from "./sparkle-mask";
+import type { SparklePixelMask } from "./sparkle-mask";
+
+export type InpaintEngine = "lama-hybrid" | "shape-aware-local" | "passthrough";
 
 export interface InpaintResult {
   cleanedBlob: Blob;
   cleanedUrl: string;
   cleanedFile: File;
+  engine: InpaintEngine;
+  warning?: string;
+}
+
+export interface InpaintOptions {
+  aiEndpoint?: string;
+  padding?: number;
+  preferAi?: boolean;
+  signal?: AbortSignal;
 }
 
 /**
@@ -14,8 +31,12 @@ export interface InpaintResult {
 export async function inpaintImage(
   file: File,
   box: BoundingBox,
-  padding: number = 4
+  optionsOrPadding: InpaintOptions | number = {},
 ): Promise<InpaintResult> {
+  const options: InpaintOptions = typeof optionsOrPadding === "number"
+    ? { padding: optionsOrPadding }
+    : optionsOrPadding;
+  const padding = options.padding ?? 4;
   if (typeof window === "undefined" || typeof document === "undefined") {
     const cleanedBlob = new Blob([await file.arrayBuffer()], { type: file.type || "image/png" });
     const cleanedFile = new File([cleanedBlob], getCleanedFileName(file.name), { type: file.type || "image/png" });
@@ -23,6 +44,7 @@ export async function inpaintImage(
       cleanedBlob,
       cleanedUrl: "",
       cleanedFile,
+      engine: "passthrough",
     };
   }
 
@@ -34,7 +56,7 @@ export async function inpaintImage(
     const cleanedBlob = new Blob([await file.arrayBuffer()], { type: file.type || "image/png" });
     const cleanedFile = new File([cleanedBlob], getCleanedFileName(file.name), { type: file.type || "image/png" });
     const cleanedUrl = typeof URL.createObjectURL === "function" ? URL.createObjectURL(cleanedBlob) : "";
-    return { cleanedBlob, cleanedUrl, cleanedFile };
+    return { cleanedBlob, cleanedUrl, cleanedFile, engine: "passthrough" };
   }
 
   const canvas = document.createElement("canvas");
@@ -46,7 +68,7 @@ export async function inpaintImage(
     const cleanedBlob = new Blob([await file.arrayBuffer()], { type: file.type || "image/png" });
     const cleanedFile = new File([cleanedBlob], getCleanedFileName(file.name), { type: file.type || "image/png" });
     const cleanedUrl = typeof URL.createObjectURL === "function" ? URL.createObjectURL(cleanedBlob) : "";
-    return { cleanedBlob, cleanedUrl, cleanedFile };
+    return { cleanedBlob, cleanedUrl, cleanedFile, engine: "passthrough" };
   }
 
   ctx.drawImage(img, 0, 0);
@@ -54,29 +76,57 @@ export async function inpaintImage(
   // Clamp bounding box to image dimensions
   const imgW = canvas.width;
   const imgH = canvas.height;
+  const sparkleMask = createSparklePixelMask(imgW, imgH, box);
+  let engine: InpaintEngine = "shape-aware-local";
+  let warning: string | undefined;
 
-  // Patch synthesis needs enough nearby, watermark-free texture to choose from.
-  const contextPadding = Math.max(padding, Math.ceil(Math.max(box.width, box.height) * 1.5));
-  const padX0 = Math.max(0, Math.floor(box.x - contextPadding));
-  const padY0 = Math.max(0, Math.floor(box.y - contextPadding));
-  const padX1 = Math.min(imgW, Math.ceil(box.x + box.width + contextPadding));
-  const padY1 = Math.min(imgH, Math.ceil(box.y + box.height + contextPadding));
-
-  const roiW = padX1 - padX0;
-  const roiH = padY1 - padY0;
-
-  if (roiW > 0 && roiH > 0) {
-    const imageData = ctx.getImageData(padX0, padY0, roiW, roiH);
-    const data = imageData.data;
-
-    contentAwareInpaint(data, roiW, roiH, padX0, padY0, box);
-
-    ctx.putImageData(imageData, padX0, padY0);
+  if (options.preferAi !== false) {
+    try {
+      const maskBlob = await sparkleMaskToPng(sparkleMask, imgW, imgH);
+      const aiBlob = await requestLamaInpaint(file, maskBlob, {
+        endpoint: options.aiEndpoint,
+        signal: options.signal,
+      });
+      const aiImage = await loadImage(aiBlob);
+      if (aiImage.naturalWidth !== imgW || aiImage.naturalHeight !== imgH) {
+        throw new Error("LaMa result dimensions do not match the source image.");
+      }
+      compositeAiResult(ctx, aiImage, sparkleMask, imgW, imgH);
+      engine = "lama-hybrid";
+    } catch (error) {
+      if (isAbortError(error) || options.signal?.aborted) throw error;
+      warning = "LaMa local is unavailable; used the shape-aware browser fallback.";
+    }
   }
 
-  const mimeType = file.type || "image/png";
+  if (engine !== "lama-hybrid") {
+    // Patch synthesis needs enough nearby, watermark-free texture to choose from.
+    const contextPadding = Math.max(padding, Math.ceil(Math.max(box.width, box.height) * 1.5));
+    const padX0 = Math.max(0, Math.floor(box.x - contextPadding));
+    const padY0 = Math.max(0, Math.floor(box.y - contextPadding));
+    const padX1 = Math.min(imgW, Math.ceil(box.x + box.width + contextPadding));
+    const padY1 = Math.min(imgH, Math.ceil(box.y + box.height + contextPadding));
+
+    const roiW = padX1 - padX0;
+    const roiH = padY1 - padY0;
+
+    if (roiW > 0 && roiH > 0) {
+      const imageData = ctx.getImageData(padX0, padY0, roiW, roiH);
+      const data = imageData.data;
+      const coreMask = maskForRoi(sparkleMask, padX0, padY0, roiW, roiH, "core");
+
+      restoreSemiTransparentEdges(data, roiW, roiH, sparkleMask, padX0, padY0);
+      contentAwareInpaintMask(data, roiW, roiH, coreMask);
+
+      ctx.putImageData(imageData, padX0, padY0);
+    }
+  }
+
+  // Always encode reconstructed images losslessly. Re-encoding a JPEG would
+  // introduce fresh block artifacts outside the repaired region.
+  const mimeType = "image/png";
   const cleanedBlob = await canvasToBlob(canvas, mimeType);
-  const cleanedFileName = getCleanedFileName(file.name);
+  const cleanedFileName = getCleanedFileName(file.name, mimeType);
   const cleanedFile = new File([cleanedBlob], cleanedFileName, { type: mimeType });
   const cleanedUrl = typeof URL.createObjectURL === "function" ? URL.createObjectURL(cleanedBlob) : "";
 
@@ -84,18 +134,23 @@ export async function inpaintImage(
     cleanedBlob,
     cleanedUrl,
     cleanedFile,
+    engine,
+    warning,
   };
 }
 
-function getCleanedFileName(name: string): string {
+function getCleanedFileName(name: string, mimeType?: string): string {
   const dotIdx = name.lastIndexOf(".");
+  if (mimeType === "image/png") {
+    return `${dotIdx > 0 ? name.slice(0, dotIdx) : name}-cleaned.png`;
+  }
   if (dotIdx > 0) {
     return `${name.slice(0, dotIdx)}-cleaned${name.slice(dotIdx)}`;
   }
   return `${name}-cleaned`;
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     try {
       const url = typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : "";
@@ -138,6 +193,111 @@ function loadImage(file: File): Promise<HTMLImageElement> {
       reject(e);
     }
   });
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function compositeAiResult(
+  targetContext: CanvasRenderingContext2D,
+  aiImage: HTMLImageElement,
+  mask: SparklePixelMask,
+  imageWidth: number,
+  imageHeight: number,
+): void {
+  const aiCanvas = document.createElement("canvas");
+  aiCanvas.width = imageWidth;
+  aiCanvas.height = imageHeight;
+  const aiContext = aiCanvas.getContext("2d");
+  if (!aiContext) throw new Error("Canvas 2D context unavailable for LaMa result.");
+  aiContext.drawImage(aiImage, 0, 0);
+
+  const original = targetContext.getImageData(mask.x, mask.y, mask.width, mask.height);
+  const generated = aiContext.getImageData(mask.x, mask.y, mask.width, mask.height);
+  compositeGeneratedPixels(original.data, generated.data, mask.binary);
+  targetContext.putImageData(generated, mask.x, mask.y);
+}
+
+/**
+ * Commits every AI-generated pixel covered by the dilated removal mask.
+ *
+ * The previous soft-alpha blend mixed the original watermark back into the
+ * reconstructed image at the four axial tips. The binary mask already has a
+ * clean context margin, so a full replacement inside it produces a seamless
+ * boundary while pixels outside it remain byte-for-byte unchanged.
+ */
+export function compositeGeneratedPixels(
+  original: Uint8ClampedArray,
+  generated: Uint8ClampedArray,
+  binaryMask: Uint8Array,
+): void {
+  if (original.length !== generated.length || original.length !== binaryMask.length * 4) {
+    throw new Error("Composite image and mask dimensions do not match.");
+  }
+
+  for (let index = 0; index < binaryMask.length; index++) {
+    const pixel = index * 4;
+    if (binaryMask[index]) {
+      // Preserve source transparency even when the AI endpoint returns an
+      // opaque PNG; only reconstructed RGB content is authorized to change.
+      generated[pixel + 3] = original[pixel + 3];
+      continue;
+    }
+    generated[pixel] = original[pixel];
+    generated[pixel + 1] = original[pixel + 1];
+    generated[pixel + 2] = original[pixel + 2];
+    generated[pixel + 3] = original[pixel + 3];
+  }
+}
+
+function maskForRoi(
+  mask: SparklePixelMask,
+  offsetX: number,
+  offsetY: number,
+  width: number,
+  height: number,
+  field: "binary" | "alpha" | "core",
+): Uint8Array {
+  const output = new Uint8Array(width * height);
+  const values = mask[field];
+  for (let y = 0; y < mask.height; y++) {
+    const targetY = mask.y + y - offsetY;
+    if (targetY < 0 || targetY >= height) continue;
+    for (let x = 0; x < mask.width; x++) {
+      const targetX = mask.x + x - offsetX;
+      if (targetX < 0 || targetX >= width) continue;
+      output[targetY * width + targetX] = values[y * mask.width + x];
+    }
+  }
+  return output;
+}
+
+/** Approximate inverse alpha-compositing for the anti-aliased white fringe. */
+function restoreSemiTransparentEdges(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  mask: SparklePixelMask,
+  offsetX: number,
+  offsetY: number,
+): void {
+  for (let y = 0; y < mask.height; y++) {
+    const targetY = mask.y + y - offsetY;
+    if (targetY < 0 || targetY >= height) continue;
+    for (let x = 0; x < mask.width; x++) {
+      const maskIndex = y * mask.width + x;
+      if (mask.core[maskIndex] || mask.alpha[maskIndex] < 8) continue;
+      const targetX = mask.x + x - offsetX;
+      if (targetX < 0 || targetX >= width) continue;
+      const opacity = Math.min(0.18, mask.alpha[maskIndex] / 255 * 0.34);
+      const pixel = (targetY * width + targetX) * 4;
+      for (let channel = 0; channel < 3; channel++) {
+        const recovered = (data[pixel + channel] - opacity * 255) / (1 - opacity);
+        data[pixel + channel] = Math.max(0, Math.min(255, Math.round(recovered)));
+      }
+    }
+  }
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string): Promise<Blob> {
@@ -253,6 +413,23 @@ export function contentAwareInpaint(
   for (let y = maskY0; y < maskY1; y++) {
     for (let x = maskX0; x < maskX1; x++) mask[y * width + x] = 1;
   }
+  contentAwareInpaintMask(data, width, height, mask);
+}
+
+/**
+ * Patch synthesis constrained by a pixel-accurate mask. Pixels outside the
+ * mask are read-only, including the rectangular corners around the sparkle.
+ */
+export function contentAwareInpaintMask(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  maskInput: Uint8Array,
+): void {
+  if (maskInput.length !== width * height) {
+    throw new Error("Inpaint mask dimensions do not match the image region.");
+  }
+  const mask = Uint8Array.from(maskInput, (value) => value ? 1 : 0);
   const source = new Uint8ClampedArray(data);
   const maskedPixels: Array<[number, number]> = [];
   const boundaryPixels: Array<[number, number]> = [];

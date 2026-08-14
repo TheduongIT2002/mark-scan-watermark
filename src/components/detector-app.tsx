@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element -- Local blob URLs must stay browser-local. */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createArchive } from "@/lib/archive";
 import { inpaintImage } from "@/lib/inpainter/inpaint";
+import { checkLamaHealth } from "@/lib/inpainter/lama-client";
 import { runValidatedScan, UnconfiguredLogoScanner } from "@/lib/scanner/scanner";
 import { decide } from "@/lib/workflow";
 import { decodeImage, DEFAULT_LIMITS, fingerprint, sha256, validateImage } from "@/lib/validation/images";
@@ -11,7 +12,8 @@ import { isTerminalWorkflowStatus } from "@/types";
 import type { LogoScanner } from "@/lib/scanner/scanner";
 import type { QueuedImage, ReviewDecision, WorkflowStatus } from "@/types";
 
-const uid = () => crypto.randomUUID();
+const uid = () => globalThis.crypto?.randomUUID?.()
+  ?? `markscan-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const statusLabel: Record<WorkflowStatus, string> = {
   queued: "Sẵn sàng",
   scanning: "Đang khôi phục…",
@@ -23,6 +25,9 @@ const statusLabel: Record<WorkflowStatus, string> = {
 };
 
 type Theme = "light" | "dark";
+type AiStatus = "checking" | "online" | "fallback";
+
+const THEME_EVENT = "markscan-theme-change";
 
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "light";
@@ -38,6 +43,15 @@ function getInitialTheme(): Theme {
     && window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+}
+
+function subscribeTheme(onStoreChange: () => void) {
+  window.addEventListener(THEME_EVENT, onStoreChange);
+  window.addEventListener("storage", onStoreChange);
+  return () => {
+    window.removeEventListener(THEME_EVENT, onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
 }
 
 function LegacyText({ children }: { children: string }) {
@@ -64,6 +78,7 @@ function localizeMessage(message: string) {
   if (message.startsWith("Fixed-logo detector not configured.")) return "Trình dò logo cố định chưa được cấu hình. Hãy bổ sung logo mẫu và bộ dữ liệu đã gắn nhãn.";
   if (message.startsWith("Scanner returned invalid or inconsistent data.")) return "Trình quét trả về dữ liệu không hợp lệ hoặc không nhất quán. Vui lòng quét lại và kiểm tra cấu hình.";
   if (message.startsWith("Download is available only")) return "Chỉ có thể tải xuống sau khi toàn bộ ảnh đã xử lý xong.";
+  if (message.startsWith("LaMa local is unavailable")) return "AI LaMa cục bộ chưa sẵn sàng; ảnh đã được xử lý bằng chế độ dự phòng giữ nét.";
   return message;
 }
 
@@ -78,7 +93,8 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
   const [progress, setProgress] = useState<Record<string, number>>({});
   const [notice, setNotice] = useState("");
   const [drag, setDrag] = useState(false);
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const theme = useSyncExternalStore(subscribeTheme, getInitialTheme, () => "light");
+  const [aiStatus, setAiStatus] = useState<AiStatus>("checking");
   const [viewTab, setViewTab] = useState<Record<string, "original" | "cleaned">>({});
   const itemsRef = useRef(items);
   const batchInput = useRef<HTMLInputElement>(null);
@@ -88,6 +104,13 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  useEffect(() => {
+    let active = true;
+    void checkLamaHealth().then((available) => {
+      if (active) setAiStatus(available ? "online" : "fallback");
+    });
+    return () => { active = false; };
+  }, []);
   useEffect(() => () => {
     itemsRef.current.forEach((item) => {
       URL.revokeObjectURL(item.url);
@@ -130,12 +153,13 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
 
   function toggleTheme() {
     const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
+    document.documentElement.dataset.theme = next;
     try {
       window.localStorage.setItem("markscan-theme", next);
     } catch {
       // The selected theme still applies for this session when storage is blocked.
     }
+    window.dispatchEvent(new Event(THEME_EVENT));
   }
 
   function remove(id: string) {
@@ -169,7 +193,16 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
     const abort = new AbortController();
     controller.current = abort;
     const targets = [...items];
-    setItems((current) => current.map((item) => ({ ...item, status: "scanning", scan: undefined, mask: undefined, decision: undefined, error: undefined })));
+    setItems((current) => current.map((item) => ({
+      ...item,
+      status: "scanning",
+      scan: undefined,
+      mask: undefined,
+      decision: undefined,
+      error: undefined,
+      inpaintEngine: undefined,
+      inpaintWarning: undefined,
+    })));
     try {
       for (const target of targets) {
         if (abort.signal.aborted) break;
@@ -181,17 +214,22 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
           if (abort.signal.aborted) break;
           let cleanedUrl: string | undefined;
           let cleanedFile: File | undefined;
+          let inpaintEngine: QueuedImage["inpaintEngine"];
+          let inpaintWarning: string | undefined;
           const box = output.mask?.bounds ?? output.result.boundingBox;
           if (output.result.status === "review" && box) {
             try {
-              const inpainted = await inpaintImage(target.file, box);
+              const inpainted = await inpaintImage(target.file, box, { signal: abort.signal });
               cleanedUrl = inpainted.cleanedUrl;
               cleanedFile = inpainted.cleanedFile;
+              inpaintEngine = inpainted.engine;
+              inpaintWarning = inpainted.warning;
             } catch (error) { console.error("Inpainting failed:", error); }
           }
           setItems((current) => current.map((item) => item.id === target.id ? {
             ...item, status: output.result.status, scan: output.result, mask: output.mask,
             decision: undefined, error: output.result.error?.message, cleanedUrl, cleanedFile,
+            inpaintEngine, inpaintWarning,
           } : item));
           setProgress((current) => ({ ...current, [target.id]: 1 }));
         } catch (error) {
@@ -256,7 +294,12 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
       <header className="topbar">
         <span className="wordmark">MarkScan</span>
         <div className="topbar-actions">
-          <span className="local-pill"><span aria-hidden="true">▣</span> Xử lý cục bộ <i>·</i> Không tải lên</span>
+          <span className="local-pill">
+            <span aria-hidden="true">▣</span> Xử lý cục bộ <i>·</i>{" "}
+            <b className={aiStatus === "online" ? "ai-online" : "ai-fallback"}>
+              {aiStatus === "checking" ? "Đang kiểm tra AI" : aiStatus === "online" ? "LaMa sẵn sàng" : "Có chế độ dự phòng"}
+            </b>
+          </span>
           <button className="icon-button theme-toggle" type="button" aria-label={theme === "light" ? "Chuyển sang giao diện tối" : "Chuyển sang giao diện sáng"} aria-pressed={theme === "dark"} title={theme === "light" ? "Giao diện tối" : "Giao diện sáng"} onClick={toggleTheme}>
             <span aria-hidden="true">{theme === "light" ? "☾" : "☀"}</span>
           </button>
@@ -360,6 +403,12 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
                       <div className="result-title"><b>{item.file.name}</b><button aria-label={`Remove ${item.file.name}`} title={`Xóa ${item.file.name}`} onClick={() => remove(item.id)}>×</button></div>
                       <small>{item.width}×{item.height} · {(item.file.size / 1048576).toFixed(2)} MB</small>
                       {item.cleanedUrl && <div className="preview-toggle" data-testid="preview-toggle"><button className={mode === "original" ? "active" : ""} onClick={() => setViewTab((current) => ({ ...current, [item.id]: "original" }))}>Ảnh gốc</button><button className={mode === "cleaned" ? "active" : ""} onClick={() => setViewTab((current) => ({ ...current, [item.id]: "cleaned" }))}>Đã xử lý</button></div>}
+                      {item.inpaintEngine && item.inpaintEngine !== "passthrough" && (
+                        <span className={`engine-chip ${item.inpaintEngine}`}>
+                          {item.inpaintEngine === "lama-hybrid" ? "✦ AI LaMa · pixel mask" : "◇ Dự phòng · mask giữ nét"}
+                        </span>
+                      )}
+                      {item.inpaintWarning && <p className="engine-warning">{localizeMessage(item.inpaintWarning)}</p>}
                       {item.scan?.confidence !== undefined && <div className="score"><span>Độ tin cậy <b>{Math.round(item.scan.confidence * 100)}%</b><LegacyText>{`Confidence ${Math.round(item.scan.confidence * 100)}%`}</LegacyText></span><span>{item.scan.processingTimeMs} ms</span></div>}
                       {item.error && <p className="review">{localizeMessage(item.error)}<LegacyText>{item.error}</LegacyText></p>}
                       {item.mask && item.status === "review" && <div className="review-actions"><button onClick={() => review(item, "accepted")}>Chấp nhận vùng chọn<LegacyText>Accept mask</LegacyText></button><button onClick={() => review(item, "rejected")}>Từ chối vùng chọn<LegacyText>Reject mask</LegacyText></button><button onClick={() => review(item, "deferred")}>Xem lại sau<LegacyText>Defer review</LegacyText></button></div>}

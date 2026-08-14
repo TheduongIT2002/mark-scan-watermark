@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   contentAwareInpaint,
+  contentAwareInpaintMask,
+  compositeGeneratedPixels,
   inpaintImage,
   teleaInpaint,
 } from "@/lib/inpainter/inpaint";
@@ -70,5 +72,44 @@ describe("inpaintImage module", () => {
     contentAwareInpaint(data, width, height, 0, 0, box);
 
     expect(data[(15 * width + 30) * 4]).toBe(25);
+  });
+
+  it("never changes pixels outside a supplied sparkle mask", () => {
+    const width = 24;
+    const height = 24;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const mask = new Uint8Array(width * height);
+    for (let index = 0; index < width * height; index++) data.set([40, 80, 120, 255], index * 4);
+    for (let y = 9; y < 15; y++) {
+      for (let x = 9; x < 15; x++) {
+        data.set([240, 240, 240, 255], (y * width + x) * 4);
+        if (x === 12 || y === 12) mask[y * width + x] = 255;
+      }
+    }
+    const untouchedCorner = (9 * width + 9) * 4;
+    contentAwareInpaintMask(data, width, height, mask);
+    expect(Array.from(data.slice(untouchedCorner, untouchedCorner + 4))).toEqual([240, 240, 240, 255]);
+    expect(data[(12 * width + 12) * 4]).toBeLessThan(200);
+  });
+
+  it("fully replaces all four watermark-tip pixels without changing their neighbors", () => {
+    const original = new Uint8ClampedArray(9 * 4);
+    const generated = new Uint8ClampedArray(9 * 4);
+    const mask = new Uint8Array(9);
+    for (let index = 0; index < 9; index++) {
+      original.set([235, 235, 235, 190], index * 4);
+      generated.set([35, 45, 55, 255], index * 4);
+    }
+    // Four axial tips around the center, matching the residual in the sample.
+    for (const index of [1, 3, 4, 5, 7]) mask[index] = 255;
+
+    compositeGeneratedPixels(original, generated, mask);
+
+    for (const index of [1, 3, 4, 5, 7]) {
+      expect(Array.from(generated.slice(index * 4, index * 4 + 4))).toEqual([35, 45, 55, 190]);
+    }
+    for (const index of [0, 2, 6, 8]) {
+      expect(Array.from(generated.slice(index * 4, index * 4 + 4))).toEqual([235, 235, 235, 190]);
+    }
   });
 });

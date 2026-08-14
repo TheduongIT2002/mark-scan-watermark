@@ -1,4 +1,5 @@
 import type { DetectorConfig } from "@/types";
+import { sha256 as sha256Fallback } from "@noble/hashes/sha256";
 
 export const SUPPORTED_MIME = new Set(["image/jpeg","image/png","image/webp"]);
 export interface ValidationLimits { maxFiles:number; maxFileBytes:number }
@@ -42,7 +43,11 @@ export async function fingerprint(file:File):Promise<string> {
 }
 
 export async function sha256(file:Blob):Promise<import("@/types").ContentHash>{
-  const digest=await crypto.subtle.digest("SHA-256",await file.arrayBuffer());
-  return {algorithm:"SHA-256",hex:Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("")};
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const subtle=globalThis.crypto?.subtle;
+  const digest=subtle
+    ?new Uint8Array(await subtle.digest("SHA-256",bytes))
+    :sha256Fallback(bytes);
+  return {algorithm:"SHA-256",hex:Array.from(digest,byte=>byte.toString(16).padStart(2,"0")).join("")};
 }
 
