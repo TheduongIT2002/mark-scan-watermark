@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import DetectorApp from "@/components/detector-app";
+import LandingPage from "@/components/landing-page";
 import { BrowserSparkleScanner } from "@/lib/detector/browser-sparkle-scanner";
 import type { SparkleDetectorConfig } from "@/lib/detector/types";
 import type { LogoScanner } from "@/lib/scanner/scanner";
@@ -17,5 +17,5 @@ export default function Home() {
     }
   });
 
-  return <DetectorApp scanner={scanner} />;
+  return <LandingPage scanner={scanner} />;
 }

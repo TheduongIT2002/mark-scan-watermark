@@ -86,6 +86,62 @@ function decisionLabel(value: ReviewDecision) {
   return value === "accepted" ? "đã chấp nhận" : value === "rejected" ? "đã từ chối" : "xem lại sau";
 }
 
+function ImageCompareSlider({
+  originalUrl,
+  cleanedUrl,
+  alt,
+  mask,
+}: {
+  originalUrl: string;
+  cleanedUrl: string;
+  alt: string;
+  mask?: QueuedImage["mask"];
+}) {
+  const [position, setPosition] = useState(50);
+
+  return (
+    <div className="card-compare-slider" style={{ "--pos": `${position}%` } as React.CSSProperties}>
+      <div className="compare-layer compare-after">
+        <img src={cleanedUrl} alt={`Ảnh đã xử lý: ${alt}`} />
+        <span className="compare-pill pill-after">Đã xử lý</span>
+      </div>
+
+      <div className="compare-layer compare-before">
+        <img src={originalUrl} alt={`Ảnh gốc: ${alt}`} />
+        {mask && (
+          <span
+            data-testid="mask-overlay"
+            className="mask-box"
+            style={{
+              left: `${(mask.bounds.x / mask.bounds.imageWidth) * 100}%`,
+              top: `${(mask.bounds.y / mask.bounds.imageHeight) * 100}%`,
+              width: `${(mask.bounds.width / mask.bounds.imageWidth) * 100}%`,
+              height: `${(mask.bounds.height / mask.bounds.imageHeight) * 100}%`,
+            }}
+          />
+        )}
+        <span className="compare-pill pill-before">Ảnh gốc</span>
+      </div>
+
+      <div className="compare-handle-line">
+        <div className="compare-handle-btn" aria-hidden="true">
+          <span>◀▶</span>
+        </div>
+      </div>
+
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={position}
+        onChange={(e) => setPosition(Number(e.target.value))}
+        className="compare-range-input"
+        aria-label={`Kéo để so sánh ảnh gốc và ảnh đã xử lý: ${alt}`}
+      />
+    </div>
+  );
+}
+
 export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }: { scanner?: LogoScanner }) {
   const [items, setItems] = useState<QueuedImage[]>([]);
   const [active, setActive] = useState(false);
@@ -95,7 +151,6 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
   const [drag, setDrag] = useState(false);
   const theme = useSyncExternalStore(subscribeTheme, getInitialTheme, () => "light");
   const [aiStatus, setAiStatus] = useState<AiStatus>("checking");
-  const [viewTab, setViewTab] = useState<Record<string, "original" | "cleaned">>({});
   const itemsRef = useRef(items);
   const batchInput = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
@@ -390,34 +445,52 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
               <div><b>{items.length}</b><span>Tổng số ảnh</span></div>
             </div>
             <div className="result-grid">
-              {items.map((item) => {
-                const mode = viewTab[item.id] ?? "original";
-                return (
-                  <article className="result-card" data-status={item.status} key={item.id}>
-                    <div className="preview">
-                      <img src={mode === "cleaned" && item.cleanedUrl ? item.cleanedUrl : item.url} alt={`${mode === "cleaned" ? "Ảnh đã xử lý" : "Ảnh gốc"}: ${item.file.name}`} />
-                      {mode === "original" && item.mask && <span data-testid="mask-overlay" className="mask-box" style={{ left: `${item.mask.bounds.x / item.mask.bounds.imageWidth * 100}%`, top: `${item.mask.bounds.y / item.mask.bounds.imageHeight * 100}%`, width: `${item.mask.bounds.width / item.mask.bounds.imageWidth * 100}%`, height: `${item.mask.bounds.height / item.mask.bounds.imageHeight * 100}%` }} />}
-                      <span className={`result-badge ${item.status}`}>{statusLabel[item.status]}</span>
-                    </div>
-                    <div className="result-body">
-                      <div className="result-title"><b>{item.file.name}</b><button aria-label={`Remove ${item.file.name}`} title={`Xóa ${item.file.name}`} onClick={() => remove(item.id)}>×</button></div>
-                      <small>{item.width}×{item.height} · {(item.file.size / 1048576).toFixed(2)} MB</small>
-                      {item.cleanedUrl && <div className="preview-toggle" data-testid="preview-toggle"><button className={mode === "original" ? "active" : ""} onClick={() => setViewTab((current) => ({ ...current, [item.id]: "original" }))}>Ảnh gốc</button><button className={mode === "cleaned" ? "active" : ""} onClick={() => setViewTab((current) => ({ ...current, [item.id]: "cleaned" }))}>Đã xử lý</button></div>}
-                      {item.inpaintEngine && item.inpaintEngine !== "passthrough" && (
-                        <span className={`engine-chip ${item.inpaintEngine}`}>
-                          {item.inpaintEngine === "lama-hybrid" ? "✦ AI LaMa · pixel mask" : "◇ Dự phòng · mask giữ nét"}
-                        </span>
-                      )}
-                      {item.inpaintWarning && <p className="engine-warning">{localizeMessage(item.inpaintWarning)}</p>}
-                      {item.scan?.confidence !== undefined && <div className="score"><span>Độ tin cậy <b>{Math.round(item.scan.confidence * 100)}%</b><LegacyText>{`Confidence ${Math.round(item.scan.confidence * 100)}%`}</LegacyText></span><span>{item.scan.processingTimeMs} ms</span></div>}
-                      {item.error && <p className="review">{localizeMessage(item.error)}<LegacyText>{item.error}</LegacyText></p>}
-                      {item.mask && item.status === "review" && <div className="review-actions"><button onClick={() => review(item, "accepted")}>Chấp nhận vùng chọn<LegacyText>Accept mask</LegacyText></button><button onClick={() => review(item, "rejected")}>Từ chối vùng chọn<LegacyText>Reject mask</LegacyText></button><button onClick={() => review(item, "deferred")}>Xem lại sau<LegacyText>Defer review</LegacyText></button></div>}
-                      {item.decision && <p className="decision">Quyết định: <b>{decisionLabel(item.decision.decision)}</b><LegacyText>{item.decision.decision}</LegacyText></p>}
-                      {item.cleanedFile && item.cleanedUrl && <button className="download-cleaned" onClick={() => { if (!item.cleanedUrl) return; const anchor = document.createElement("a"); anchor.href = item.cleanedUrl; anchor.download = item.cleanedFile?.name ?? "anh-da-xu-ly"; anchor.click(); }}>↓ Tải ảnh đã xử lý</button>}
-                    </div>
-                  </article>
-                );
-              })}
+              {items.map((item) => (
+                <article className="result-card" data-status={item.status} key={item.id}>
+                  <div className="preview">
+                    {item.cleanedUrl ? (
+                      <ImageCompareSlider
+                        originalUrl={item.url}
+                        cleanedUrl={item.cleanedUrl}
+                        alt={item.file.name}
+                        mask={item.mask}
+                      />
+                    ) : (
+                      <>
+                        <img src={item.url} alt={`Ảnh gốc: ${item.file.name}`} />
+                        {item.mask && (
+                          <span
+                            data-testid="mask-overlay"
+                            className="mask-box"
+                            style={{
+                              left: `${(item.mask.bounds.x / item.mask.bounds.imageWidth) * 100}%`,
+                              top: `${(item.mask.bounds.y / item.mask.bounds.imageHeight) * 100}%`,
+                              width: `${(item.mask.bounds.width / item.mask.bounds.imageWidth) * 100}%`,
+                              height: `${(item.mask.bounds.height / item.mask.bounds.imageHeight) * 100}%`,
+                            }}
+                          />
+                        )}
+                      </>
+                    )}
+                    <span className={`result-badge ${item.status}`}>{statusLabel[item.status]}</span>
+                  </div>
+                  <div className="result-body">
+                    <div className="result-title"><b>{item.file.name}</b><button aria-label={`Remove ${item.file.name}`} title={`Xóa ${item.file.name}`} onClick={() => remove(item.id)}>×</button></div>
+                    <small>{item.width}×{item.height} · {(item.file.size / 1048576).toFixed(2)} MB</small>
+                    {item.inpaintEngine && item.inpaintEngine !== "passthrough" && (
+                      <span className={`engine-chip ${item.inpaintEngine}`}>
+                        {item.inpaintEngine === "lama-hybrid" ? "✦ AI LaMa · pixel mask" : "◇ Dự phòng · mask giữ nét"}
+                      </span>
+                    )}
+                    {item.inpaintWarning && <p className="engine-warning">{localizeMessage(item.inpaintWarning)}</p>}
+                    {item.scan?.confidence !== undefined && <div className="score"><span>Độ tin cậy <b>{Math.round(item.scan.confidence * 100)}%</b><LegacyText>{`Confidence ${Math.round(item.scan.confidence * 100)}%`}</LegacyText></span><span>{item.scan.processingTimeMs} ms</span></div>}
+                    {item.error && <p className="review">{localizeMessage(item.error)}<LegacyText>{item.error}</LegacyText></p>}
+                    {item.mask && item.status === "review" && <div className="review-actions"><button onClick={() => review(item, "accepted")}>Chấp nhận vùng chọn<LegacyText>Accept mask</LegacyText></button><button onClick={() => review(item, "rejected")}>Từ chối vùng chọn<LegacyText>Reject mask</LegacyText></button><button onClick={() => review(item, "deferred")}>Xem lại sau<LegacyText>Defer review</LegacyText></button></div>}
+                    {item.decision && <p className="decision">Quyết định: <b>{decisionLabel(item.decision.decision)}</b><LegacyText>{item.decision.decision}</LegacyText></p>}
+                    {item.cleanedFile && item.cleanedUrl && <button className="download-cleaned" onClick={() => { if (!item.cleanedUrl) return; const anchor = document.createElement("a"); anchor.href = item.cleanedUrl; anchor.download = item.cleanedFile?.name ?? "anh-da-xu-ly"; anchor.click(); }}>↓ Tải ảnh đã xử lý</button>}
+                  </div>
+                </article>
+              ))}
             </div>
             <div className="new-batch"><button className="button secondary" onClick={clear}>Bắt đầu lượt mới</button></div>
           </section>
