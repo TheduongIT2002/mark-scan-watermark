@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import os
 import threading
+import time
 import urllib.request
 from pathlib import Path
 
@@ -61,6 +63,7 @@ async def private_network_access(request, call_next):
 
 _model: torch.jit.ScriptModule | None = None
 _model_lock = threading.Lock()
+_inference_lock = asyncio.Lock()
 
 
 def _device() -> torch.device:
@@ -135,28 +138,7 @@ def _crop_bounds(mask: np.ndarray) -> tuple[int, int, int, int]:
     return crop_x0, crop_y0, crop_x0 + target_size, crop_y0 + target_size
 
 
-@app.get("/health")
-def health() -> dict[str, object]:
-    return {
-        "status": "ok",
-        "engine": "big-lama",
-        "model_loaded": _model is not None,
-        "device": str(_device()),
-    }
-
-
-@app.post("/v1/inpaint")
-async def inpaint(
-    image: UploadFile = File(...),
-    mask: UploadFile = File(...),
-) -> Response:
-    image_bytes = await image.read()
-    mask_bytes = await mask.read()
-    if not image_bytes or len(image_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=413, detail="Image is empty or exceeds the local AI limit")
-    if not mask_bytes or len(mask_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=413, detail="Mask is empty or exceeds the local AI limit")
-
+def _run_inpaint_pipeline(image_bytes: bytes, mask_bytes: bytes) -> bytes:
     source_image = _decode_image(image_bytes, "RGB")
     source_mask = _decode_image(mask_bytes, "L")
     if source_image.size != source_mask.size:
@@ -204,4 +186,39 @@ async def inpaint(
     output_crop[selected_pixels] = crop_output[selected_pixels]
     encoded = io.BytesIO()
     Image.fromarray(output, mode="RGB").save(encoded, format="PNG", optimize=True)
-    return Response(content=encoded.getvalue(), media_type="image/png")
+    return encoded.getvalue()
+
+
+@app.get("/health")
+def health() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "engine": "big-lama",
+        "model_loaded": _model is not None,
+        "device": str(_device()),
+        "busy": _inference_lock.locked(),
+    }
+
+
+@app.post("/v1/inpaint")
+async def inpaint(
+    image: UploadFile = File(...),
+    mask: UploadFile = File(...),
+) -> Response:
+    image_bytes = await image.read()
+    mask_bytes = await mask.read()
+    if not image_bytes or len(image_bytes) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="Image is empty or exceeds the local AI limit")
+    if not mask_bytes or len(mask_bytes) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="Mask is empty or exceeds the local AI limit")
+
+    start_time = time.perf_counter()
+    async with _inference_lock:
+        result_bytes = await asyncio.to_thread(_run_inpaint_pipeline, image_bytes, mask_bytes)
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+    headers = {
+        "X-Inpaint-Engine": "big-lama",
+        "X-Processing-Time-Ms": str(duration_ms),
+    }
+    return Response(content=result_bytes, media_type="image/png", headers=headers)

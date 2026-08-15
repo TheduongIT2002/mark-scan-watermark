@@ -1,3 +1,14 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
-export default defineConfig({test:{environment:"jsdom"},resolve:{alias:{"@":path.resolve(import.meta.dirname,"src")}}});
+export default defineConfig({
+  test: {
+    environment: "jsdom",
+    testTimeout: 60000,
+    hookTimeout: 60000,
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+    },
+  },
+});

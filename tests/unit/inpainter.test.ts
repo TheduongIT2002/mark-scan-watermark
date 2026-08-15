@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   contentAwareInpaint,
   contentAwareInpaintMask,
@@ -111,5 +111,92 @@ describe("inpaintImage module", () => {
     for (const index of [0, 2, 6, 8]) {
       expect(Array.from(generated.slice(index * 4, index * 4 + 4))).toEqual([235, 235, 235, 190]);
     }
+  });
+
+  it("does not switch to shape-aware fallback during transient AI throttling in a 5-image batch", async () => {
+    let attempts = 0;
+    const fakeAiPng = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
+    // Mock fetch for requestLamaInpaint
+    const mockFetch = vi.fn(async () => {
+      attempts++;
+      // Return 429 on odd attempts for first few images
+      if (attempts % 2 === 1 && attempts <= 5) {
+        return {
+          ok: false,
+          status: 429,
+          headers: new Headers({ "retry-after": "0.01" }),
+          text: async () => "Rate limit exceeded",
+        };
+      }
+      return {
+        ok: true,
+        headers: new Headers({ "content-type": "image/png" }),
+        blob: async () => new Blob([fakeAiPng], { type: "image/png" }),
+      };
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    // Mock Image in jsdom
+    const originalImage = globalThis.Image;
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: ((err: unknown) => void) | null = null;
+      naturalWidth = 100;
+      naturalHeight = 100;
+      width = 100;
+      height = 100;
+      set src(_val: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", MockImage);
+
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:test"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    // Mock CanvasRenderingContext2D
+    const mockContext = {
+      fillStyle: "#000",
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+      createImageData: vi.fn((w: number, h: number) => ({
+        data: new Uint8ClampedArray(w * h * 4),
+        width: w,
+        height: h,
+      })),
+      getImageData: vi.fn((_x: number, _y: number, w = 100, h = 100) => ({
+        data: new Uint8ClampedArray(w * h * 4),
+        width: w,
+        height: h,
+      })),
+      putImageData: vi.fn(),
+    };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(mockContext as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((cb: BlobCallback) => {
+      cb(new Blob([fakeAiPng], { type: "image/png" }));
+    });
+
+    const box: BoundingBox = { x: 10, y: 10, width: 20, height: 20, imageWidth: 100, imageHeight: 100 };
+    const results = [];
+
+    for (let i = 0; i < 5; i++) {
+      const file = new File([fakeAiPng], `batch-${i}.png`, { type: "image/png" });
+      const result = await inpaintImage(file, box, {
+        aiEndpoint: "http://127.0.0.1:8384",
+      });
+      results.push(result);
+    }
+
+    expect(results).toHaveLength(5);
+    for (const res of results) {
+      expect(res.engine).toBe("lama-hybrid");
+      expect(res.warning).toBeUndefined();
+    }
+
+    vi.unstubAllGlobals();
+    globalThis.Image = originalImage;
   });
 });

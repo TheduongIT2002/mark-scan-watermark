@@ -67,6 +67,29 @@ npm run test:e2e
 npm run build
 ```
 
+## Production Deployment & Reload
+
+When updating the Nginx configuration and systemd service on the production server:
+
+1. **Reload Nginx configuration**:
+   ```bash
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+2. **Restart AI service**:
+   ```bash
+   sudo systemctl restart markscan-ai.service
+   sudo systemctl status markscan-ai.service
+   ```
+
+3. **5-Request Smoke Test**:
+   Verify that rapid health requests and inpaint requests succeed without rate-limit starvation (200 OK):
+   ```bash
+   for i in {1..5}; do curl -s -o /dev/null -w "%{http_code}\n" https://duongpt.io.vn/api/ai/health; done
+   ```
+   All 5 requests should return `200`.
+
 The companion service exposes `http://127.0.0.1:8384/health`. It accepts only
 configured frontend origins and rejects empty, oversized or mismatched
-image/mask inputs.
+image/mask inputs. Single-threaded model inference on CPU is queued safely
+without blocking event loop health probes.
