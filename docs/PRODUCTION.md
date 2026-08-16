@@ -1,6 +1,6 @@
 # MarkScan Production Operations Note
 
-> Cập nhật lần cuối: 2026-08-16 (Asia/Bangkok)  
+> Cập nhật lần cuối: 2026-08-16 (Asia/Bangkok)
 > Mục đích: lưu trạng thái production và các thay đổi hạ tầng để những nhiệm vụ sau không triển khai nhầm cấu hình.
 
 ## 1. Trạng thái đang chạy
@@ -223,4 +223,3 @@ Trước khi rollback phải kiểm tra thư mục còn tồn tại. Có thể c
 5. Thêm per-user quota/rate limit thay vì chỉ dựa trên IP.
 6. Cân nhắc worker tối thiểu 4 vCPU/8 GiB RAM hoặc GPU nếu mục tiêu là 10 user x 10 ảnh đồng thời.
 7. Tự động hóa build artifact, release symlink, health check và rollback trong CI/CD.
-
