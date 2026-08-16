@@ -375,7 +375,7 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
               onKeyDown={(event) => { if (!active && (event.key === "Enter" || event.key === " ")) batchInput.current?.click(); }}>
               <span className="upload-glyph" aria-hidden="true">⇧</span>
               <h1>Kéo thả ảnh vào đây để bắt đầu</h1>
-              <p>JPG, PNG hoặc WebP · Tối đa 50 ảnh · 25 MB mỗi ảnh</p>
+              <p>JPG, PNG hoặc WebP · Tối đa {DEFAULT_LIMITS.maxFiles} ảnh · 25 MB mỗi ảnh</p>
               <label className="button primary" htmlFor="batch-input">Chọn ảnh</label>
             </div>
             <p className="privacy-note"><span aria-hidden="true">♢</span> Tệp không bao giờ rời khỏi trình duyệt của bạn</p>
@@ -399,7 +399,7 @@ export default function DetectorApp({ scanner = new UnconfiguredLogoScanner() }:
 
             <div className="queue-heading">
               <div><h1>{active ? "Hàng đợi xử lý" : "Danh sách ảnh"}</h1><span className="ready-copy">{items.length} ảnh sẵn sàng<LegacyText>{`${items.length} image${items.length === 1 ? "" : "s"} ready`}</LegacyText></span></div>
-              <span>{items.length}/50 · {(totalBytes / 1048576).toFixed(1)} MB</span>
+              <span>{items.length}/{DEFAULT_LIMITS.maxFiles} · {(totalBytes / 1048576).toFixed(1)} MB</span>
             </div>
             <div className="queue-table" role="table" aria-label="Danh sách ảnh chờ xử lý">
               <div className="queue-row queue-labels" role="row">

@@ -16,6 +16,21 @@ describe("DetectorApp workflow",()=>{
   expect(screen.queryByText(/digest/)).toBeNull();
  });
  it("uploads, rejects duplicates and corrupt inputs, clears, and permits reselect",async()=>{render(<DetectorApp/>);const input=document.querySelector("#batch-input") as HTMLInputElement;fireEvent.change(input,{target:{files:[file()]}});await screen.findByText("1 image ready");fireEvent.change(input,{target:{files:[file()]}});await screen.findByText(/duplicate skipped/);fireEvent.change(input,{target:{files:[file("broken.png","broken")]}});await screen.findByText(/signature/);fireEvent.click(screen.getByText("Clear queue"));await waitFor(()=>expect(screen.queryByText("1 image ready")).toBeNull());fireEvent.change(input,{target:{files:[file()]}});await screen.findByText("1 image ready");});
+ it("limits each batch to 15 images across initial and subsequent selections",async()=>{
+  render(<DetectorApp/>);
+  const input=document.querySelector("#batch-input") as HTMLInputElement;
+  const images=Array.from({length:16},(_,index)=>file(`image-${index}.png`,new Uint8Array([...png,index])));
+  fireEvent.change(input,{target:{files:images}});
+  await screen.findByText("Mỗi lượt chỉ được chọn tối đa 15 ảnh.");
+  expect(screen.queryByText("16 images ready")).toBeNull();
+  fireEvent.change(input,{target:{files:images.slice(0,15)}});
+  await screen.findByText("15 images ready");
+  expect(screen.getByText(/^15\/15/)).toBeTruthy();
+  fireEvent.change(input,{target:{files:[images[15]]}});
+  await screen.findByText("Mỗi lượt chỉ được chọn tối đa 15 ảnh.");
+  expect(screen.getByText("15 images ready")).toBeTruthy();
+  expect(screen.queryByText("16 images ready")).toBeNull();
+ });
  it("production scanner ends as actionable error without review controls",async()=>{render(<DetectorApp/>);fireEvent.change(document.querySelector("#batch-input")!,{target:{files:[file()]}});await screen.findByText("1 image ready");fireEvent.click(screen.getByText(/Scan images/));await screen.findByText(/Fixed-logo detector not configured/);expect(document.querySelector("article")?.dataset.status).toBe("error");expect(screen.queryByText("Accept mask")).toBeNull();});
  it("shows review controls only for an injected genuine mask and records each decision",async()=>{const scanner:LogoScanner={detectorVersion:"test",configVersion:"test",async scan(input){const bounds={x:80,y:80,width:20,height:20,imageWidth:100,imageHeight:100};return {result:{itemId:input.itemId,sourceHash:input.sourceHash,status:"review",confidence:.95,boundingBox:bounds,detectorVersion:"test",configVersion:"test",scannedAt:"2026-01-01T00:00:00.000Z",processingTimeMs:1},mask:{maskId:"mask",itemId:input.itemId,sourceHash:input.sourceHash,maskHash:input.sourceHash,version:"test",encoding:"binary-rle",width:100,height:100,bounds}}}};render(<DetectorApp scanner={scanner}/>);fireEvent.change(document.querySelector("#batch-input")!,{target:{files:[file()]}});await screen.findByText("1 image ready");fireEvent.click(screen.getByText(/Scan images/));await screen.findByText("Accept mask");expect(screen.getByTestId("mask-overlay")).toBeTruthy();for(const [label,value] of [["Accept mask","accepted"],["Reject mask","rejected"],["Defer review","deferred"]]){fireEvent.click(screen.getByText(label));await waitFor(()=>expect(document.querySelector(".decision")?.textContent).toContain(value));}});
  it("normalizes malicious review output to error without mask controls",async()=>{const scanner:LogoScanner={detectorVersion:"bad",configVersion:"bad",async scan(input){return {result:{itemId:input.itemId,sourceHash:input.sourceHash,status:"review",detectorVersion:"bad",configVersion:"bad",scannedAt:new Date().toISOString(),processingTimeMs:1}}}};render(<DetectorApp scanner={scanner}/>);fireEvent.change(document.querySelector("#batch-input")!,{target:{files:[file()]}});await screen.findByText("1 image ready");fireEvent.click(screen.getByText(/Scan images/));await screen.findByText(/invalid or inconsistent data/);expect(document.querySelector("article")?.dataset.status).toBe("error");expect(screen.queryByText("Accept mask")).toBeNull();expect(screen.queryByTestId("mask-overlay")).toBeNull();});
